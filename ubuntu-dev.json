@@ -1,0 +1,86 @@
+{
+    "variables": {
+        "ssh_username": "{{ env `VAGRANT_USERNAME` }}",
+        "ssh_password": "{{ env `VAGRANT_PASSWORD` }}",
+        "project_db_name": "{{ env `BENV_PROJECT_DATABASE_NAME` }}",
+        "virtualenv_name": "{{ env `BENV_VIRTUALENV_NAME` }}",
+        "hostname": "{{ env `BENV_BOX_HOSTNAME` }}",
+        "box_dir": "{{ env `BOX_DIR` }}",
+        "iso_url": "{{ env `UBUNTU_1404_SERVER_ISO_PATH` }}",
+        "iso_checksum": "{{ env `UBUNTU_1404_SERVER_ISO_CHKSUM` }}"
+    },
+    "builders": [
+        {
+            "type": "virtualbox-iso",
+            "boot_command": [
+                "<esc><esc><enter><wait>",
+                "/install/vmlinuz noapic ",
+                "preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg ",
+                "debian-installer=en_US auto locale=en_US kbd-chooser/method=us ",
+                "hostname={{ .Name }} ",
+                "fb=false debconf/frontend=noninteractive ",
+                "keyboard-configuration/modelcode=SKIP keyboard-configuration/layout=USA ",
+                "keyboard-configuration/variant=USA console-setup/ask_detect=false ",
+                "initrd=/install/initrd.gz -- <enter>"
+            ],
+            "boot_wait": "5s",
+            "guest_os_type": "Ubuntu_64",
+            "guest_additions_path": "VBoxGuestAdditions_{{.Version}}.iso",
+            "headless": "false",
+            "http_directory": "{{ pwd }}",
+            "iso_url": "{{ user `iso_url` }}",
+            "iso_checksum": "{{ user `iso_checksum` }}",
+            "iso_checksum_type": "sha1",
+            "output_directory": "{{ user `hostname` }}",
+            "ssh_username": "{{ user `ssh_username` }}",
+            "ssh_password": "{{ user `ssh_password` }}",
+            "ssh_wait_timeout": "30m",
+            "shutdown_command": "echo {{ user `ssh_password` }} | sudo -S shutdown -P now",
+            "disk_size": 50000,
+            "vm_name": "{{ user `hostname` }}",
+            "vboxmanage": [
+              ["modifyvm", "{{.Name}}", "--memory", "2048"],
+              ["modifyvm", "{{.Name}}", "--cpus", "1"]
+            ]
+        }
+    ],
+    "provisioners": [
+        {
+            "type": "file",
+            "source": "files",
+            "destination": "/home/{{ user `ssh_username` }}"
+        },
+        {
+            "type": "shell",
+            "scripts": [
+                "scripts/variables.sh",
+                "scripts/rebase.sh",
+                "scripts/post_build.sh",
+                "scripts/sshd.sh",
+                "scripts/vmtools.sh",
+                "scripts/app_install.sh",
+                "scripts/packer.sh",
+                "scripts/vagrant_aws.sh",
+                "scripts/mariadb_setup.sh",
+                "scripts/vagrant_user_env.sh",
+                "scripts/cleanup.sh",
+                "scripts/zerodisk.sh"
+            ],
+            "environment_vars": [
+                "BENV_VAGRANT_USER={{ user `ssh_username` }}",
+                "BENV_VAGRANT_PWD={{ user `ssh_password` }}",
+                "BENV_VAGRANT_HOME=/home/{{ user `ssh_username` }}",
+                "BENV_PROJECT_DATABASE_NAME={{ user `project_db_name` }}",
+                "BENV_VIRTUALENV_NAME={{ user `virtualenv_name` }}"
+            ],
+            "execute_command": "echo {{ user `ssh_password` }} | {{ .Vars }} sudo -E -S bash '{{ .Path }}'"
+        }
+    ],
+    "post-processors": [
+        {
+            "type": "vagrant",
+            "compression_level": 9,
+            "output": "{{ user `box_dir`}}/{{ user `hostname` }}.box"
+        }
+    ]
+}
